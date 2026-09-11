@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reembolsos Médicos</title>
+<link rel="icon" type="image/png" href="img/reembolsos_icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg: #E8F4EE;
+    --paper: #FFFFFF;
+    --ink: #1C2B24;
+    --ink-soft: #4B5850;
+    --pine: #0A7A50;
+    --pine-dim: #C9F0DE;
+    --gold: #E8A23D;
+    --gold-bg: #FCE9C4;
+    --brick: #C13224;
+    --brick-bg: #FCE1DA;
+    --line: #D9E8E0;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans', sans-serif;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:760px;margin:0 auto;padding:20px 16px 60px;}
+  h1,h2,h3{font-family:'Fraunces', serif;font-weight:500;margin:0;}
+  .num, .mono{font-family:'IBM Plex Mono', monospace;}
+
+  header.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap;}
+  header.top h1{font-size:22px;color:var(--pine);display:flex;align-items:center;gap:8px;}
+  .brand-icon{height:26px;width:auto;}
+  header.top .sub{font-size:13px;color:var(--ink-soft);}
+  .logout{background:none;border:1px solid var(--line);border-radius:4px;padding:6px 10px;font-size:12px;color:var(--ink-soft);cursor:pointer;}
+
+  .hero{display:flex;gap:14px;margin-bottom:20px;flex-wrap:wrap;}
+  .hero .card{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:16px 18px;flex:1;min-width:160px;}
+  .hero .card .amount{font-size:26px;font-weight:500;color:var(--pine);line-height:1;}
+  .hero .card .label{font-size:12px;color:var(--ink-soft);margin-top:6px;}
+
+  nav.tabs{display:flex;gap:18px;border-bottom:1px solid var(--line);margin-bottom:20px;overflow-x:auto;}
+  nav.tabs button{background:none;border:none;padding:8px 2px 10px;font-size:14px;color:var(--ink-soft);cursor:pointer;font-family:'IBM Plex Sans',sans-serif;white-space:nowrap;border-bottom:2px solid transparent;}
+  nav.tabs button.active{color:var(--pine);border-bottom-color:var(--pine);font-weight:500;}
+
+  section.panel{display:none;}
+  section.panel.active{display:block;}
+
+  .row{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line);gap:10px;}
+  .row:last-child{border-bottom:none;}
+  .row .name{font-size:14px;}
+  .row .sector{font-size:12px;color:var(--ink-soft);}
+  .status{font-size:11px;padding:2px 8px;border-radius:20px;white-space:nowrap;}
+  .status.pagado{background:var(--pine-dim);color:var(--pine);}
+  .status.parcial{background:var(--gold-bg);color:#8A5A0E;}
+  .status.pendiente{background:var(--brick-bg);color:#A3341F;}
+
+  form{display:flex;flex-direction:column;gap:12px;background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:16px;margin-bottom:20px;}
+  label{font-size:12px;color:var(--ink-soft);display:flex;flex-direction:column;gap:5px;}
+  input,select,textarea{font-family:'IBM Plex Sans',sans-serif;font-size:14px;padding:9px 10px;border:1px solid var(--line);border-radius:4px;background:#fff;color:var(--ink);}
+  input.mono{font-family:'IBM Plex Mono',monospace;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  button.primary{background:var(--pine);color:#fff;border:none;border-radius:4px;padding:11px;font-size:14px;font-family:'IBM Plex Sans',sans-serif;cursor:pointer;margin-top:4px;}
+  button.secondary{background:none;color:var(--pine);border:1px solid var(--pine);border-radius:4px;padding:7px 12px;font-size:12px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;}
+  button.ghost{background:none;border:none;color:var(--ink-soft);font-size:12px;cursor:pointer;text-decoration:underline;}
+  h3.section-title{font-size:14px;color:var(--pine);margin-bottom:8px;}
+  .empty{color:var(--ink-soft);font-size:13px;padding:16px 0;text-align:center;}
+
+  .gasto-card{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin-bottom:14px;}
+  .gasto-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;}
+  .gasto-head .name{font-size:14px;}
+  .gasto-head .sector{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+  .gasto-head .amount{font-size:15px;color:var(--ink);}
+  .solicitudes-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .sol-slot{border:1px dashed var(--line);border-radius:5px;padding:10px;}
+  .sol-slot.filled{border-style:solid;}
+  .sol-slot .sol-tipo{font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px;display:flex;align-items:center;gap:5px;}
+  .entidad-icon{height:14px;width:auto;}
+  .sol-slot .sol-monto{font-size:14px;}
+  .sol-slot .sol-meta{font-size:11px;color:var(--ink-soft);margin-top:6px;}
+  .sol-monto-row{display:flex;justify-content:space-between;align-items:baseline;margin:4px 0 2px;}
+  .sol-monto-row .sol-monto-label{font-size:11px;color:var(--ink-soft);}
+  .sol-sub-row{display:flex;justify-content:space-between;align-items:baseline;margin:2px 0;font-size:12px;color:var(--ink-soft);}
+  .sol-sub-row .num{font-size:12px;}
+  .sol-sub-row.copago{color:#8A5A0E;}
+  .sol-add-btn{background:none;border:none;color:var(--pine);font-size:12px;cursor:pointer;padding:0;text-decoration:underline;}
+  .mini-form{display:flex;flex-direction:column;gap:8px;margin-top:8px;}
+  .mini-form input, .mini-form select{font-size:12px;padding:6px 8px;}
+  .mini-form-actions{display:flex;gap:6px;}
+  .mini-form-actions button{flex:1;font-size:11px;padding:6px;}
+
+  .filtros-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
+  .filtros-row input, .filtros-row select{flex:1;min-width:120px;}
+  .filtros-row label{flex:1;min-width:120px;}
+  .paginador{display:flex;justify-content:center;align-items:center;gap:12px;margin-top:16px;}
+  .paginador button{background:none;border:1px solid var(--line);border-radius:4px;padding:6px 12px;font-size:12px;color:var(--pine);cursor:pointer;font-family:'IBM Plex Sans',sans-serif;}
+  .paginador button:disabled{opacity:.4;cursor:default;}
+  .paginador .page-info{font-size:12px;color:var(--ink-soft);}
+
+  .pending-item{padding:10px 0;border-bottom:1px solid var(--line);font-size:13px;}
+  .pending-item:last-child{border-bottom:none;}
+  .pending-item .top-row{display:flex;justify-content:space-between;gap:8px;}
+  .pending-item .meta{color:var(--ink-soft);font-size:11px;margin-top:2px;}
+
+  .login-wrap{max-width:340px;margin:80px auto;text-align:center;}
+  .login-wrap h1{font-size:22px;color:var(--pine);margin-bottom:6px;display:flex;align-items:center;justify-content:center;gap:8px;}
+  .login-wrap .sub{font-size:13px;color:var(--ink-soft);margin-bottom:24px;}
+  .login-error{font-size:13px;color:var(--brick);min-height:18px;}
+  .loading-msg{text-align:center;color:var(--ink-soft);font-size:13px;padding:40px 0;}
+  .banner.error{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:6px;margin-bottom:18px;font-size:14px;background:var(--brick-bg);color:#A3341F;}
+
+  @media (max-width: 480px){
+    .grid2{grid-template-columns:1fr;}
+    .solicitudes-row{grid-template-columns:1fr;}
+    header.top h1{font-size:19px;}
+    .hero .card{min-width:140px;padding:14px 16px;}
+    .hero .card .amount{font-size:22px;}
+    .pending-item .top-row{flex-wrap:wrap;}
+    .login-wrap{margin:48px auto;}
+  }
+</style>
+</head>
+<body>
+
+<div id="loginScreen" class="wrap" style="display:none;">
+  <div class="login-wrap">
+    <h1><img src="img/reembolsos_icon.png" class="brand-icon" alt="">Reembolsos Médicos</h1>
+    <div class="sub">Isapre · Seguro complementario</div>
+    <form id="loginForm">
+      <label>Correo<input type="email" id="loginEmail" required></label>
+      <label>Contraseña<input type="password" id="loginPassword" required></label>
+      <button type="submit" class="primary">Entrar</button>
+      <div class="login-error" id="loginError"></div>
+    </form>
+  </div>
+</div>
+
+<div id="loadingScreen" class="wrap"><div class="loading-msg">Cargando…</div></div>
+
+<div id="appScreen" class="wrap" style="display:none;">
+
+  <header class="top">
+    <div>
+      <h1><img src="img/reembolsos_icon.png" class="brand-icon" alt="">Reembolsos Médicos</h1>
+      <div class="sub">Isapre · Seguro complementario</div>
+    </div>
+    <button class="logout" id="logoutBtn">Cerrar sesión</button>
+  </header>
+
+  <div id="banner-slot"></div>
+
+  <div class="hero" id="hero"></div>
+
+  <nav class="tabs">
+    <button data-tab="resumen" class="active">Resumen</button>
+    <button data-tab="gastos">Gastos</button>
+    <button data-tab="reembolsos">Reembolsos</button>
+    <button data-tab="familiares">Familiares</button>
+  </nav>
+
+  <section class="panel active" id="panel-resumen">
+    <h3 class="section-title">Solicitudes pendientes de seguimiento</h3>
+    <div id="pendientesList"></div>
+    <h3 class="section-title" style="margin-top:24px;">Gastos sin solicitud ingresada</h3>
+    <div id="sinSolicitudList"></div>
+  </section>
+
+  <section class="panel" id="panel-gastos">
+    <form id="gastoForm">
+      <label>Familiar<select id="gFamiliar" required></select></label>
+      <div class="grid2">
+        <label>Fecha de Gasto<input type="date" id="gFecha" required></label>
+        <label>Tipo de Gasto
+          <select id="gTipo" required>
+            <option value="consulta">Consulta Médica</option>
+            <option value="medicamento">Medicamento</option>
+            <option value="examen">Exámen</option>
+            <option value="otro">Otro</option>
+          </select>
+        </label>
+      </div>
+      <label>Descripción<input type="text" id="gDescripcion" placeholder="Ej: Consulta traumatólogo Dr. Soto"></label>
+      <label>Monto total del gasto<input type="text" inputmode="numeric" class="mono" id="gMonto" placeholder="$0" oninput="formatMontoInput(this)" required></label>
+      <button type="submit" class="primary">Registrar gasto</button>
+    </form>
+  </section>
+
+  <section class="panel" id="panel-reembolsos">
+    <h3 class="section-title">Reembolsos</h3>
+    <div class="filtros-row">
+      <label>Buscar
+        <input type="text" id="filtroTexto" placeholder="Descripción, tipo o familiar…">
+      </label>
+      <label>Familiar
+        <select id="filtroFamiliar"><option value="">Todos</option></select>
+      </label>
+      <label>Tipo de Gasto
+        <select id="filtroTipo">
+          <option value="">Todos</option>
+          <option value="consulta">Consulta Médica</option>
+          <option value="medicamento">Medicamento</option>
+          <option value="examen">Exámen</option>
+          <option value="otro">Otro</option>
+        </select>
+      </label>
+    </div>
+    <div id="gastosList"></div>
+    <div class="paginador" id="gastosPaginador"></div>
+  </section>
+
+  <section class="panel" id="panel-familiares">
+    <form id="familiarForm">
+      <label>Nombre<input type="text" id="fNombre" required></label>
+      <button type="submit" class="primary">Agregar familiar</button>
+    </form>
+    <h3 class="section-title">Familiares</h3>
+    <div id="familiaresList"></div>
+  </section>
+
+</div>
+
+<script>
+const SUPABASE_URL = 'https://rsdnvbtpduojxvzqnsmf.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_FxEyCZOcyEh7ki7zivuOgw_qG4HGmPa';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let familiares = [];
+let gastos = [];
+let solicitudes = [];
+let openForm = null; // { gastoId, entidad } — mini-form actualmente abierto para agregar solicitud
+let editingSolicitud = null; // id de la solicitud en edición
+let registradosFiltro = { texto:'', familiarId:'', tipo:'' };
+let registradosPage = 1;
+const GASTOS_PAGE_SIZE = 5;
+
+const fmtMoney = (n) => '$' + Math.round(n).toLocaleString('es-CL');
+const fmtFecha = (isoStr) => { if(!isoStr) return ''; const [y,m,d] = isoStr.split('-'); return `${d}-${m}-${y}`; };
+const fmtMontoInputValue = (n) => (n || n===0) ? fmtMoney(n) : '';
+const parseMonto = (str) => { const digits = (str||'').replace(/\D/g,''); return digits ? Number(digits) : 0; };
+
+function formatMontoInput(el){
+  const digitsBeforeCursor = el.value.slice(0, el.selectionStart).replace(/\D/g,'').length;
+  const digits = el.value.replace(/\D/g,'');
+  el.value = digits ? fmtMoney(Number(digits)) : '';
+  if(digits){
+    let count = 0, pos = el.value.length;
+    for(let i=0;i<el.value.length;i++){
+      if(/\d/.test(el.value[i])) count++;
+      if(count === digitsBeforeCursor){ pos = i+1; break; }
+    }
+    el.setSelectionRange(pos, pos);
+  }
+}
+const tipoLabel = { consulta:'Consulta médica', medicamento:'Medicamento', examen:'Examen', otro:'Otro' };
+const entidadLabel = { isapre:'Isapre', seguro:'Seguro complementario' };
+const entidadIcon = { isapre:'img/isapre_logo.png', seguro:'img/seguro_logo.webp' };
+const entidadIconHTML = (entidad) => entidadIcon[entidad] ? `<img src="${entidadIcon[entidad]}" class="entidad-icon" alt="">` : '';
+const estadoLabel = { solicitado:'Solicitado', pagado:'Pagado', rechazado:'Rechazado' };
+const estadoClass = { solicitado:'parcial', pagado:'pagado', rechazado:'pendiente' };
+
+function showScreen(name){
+  document.getElementById('loginScreen').style.display = name==='login' ? 'block':'none';
+  document.getElementById('loadingScreen').style.display = name==='loading' ? 'block':'none';
+  document.getElementById('appScreen').style.display = name==='app' ? 'block':'none';
+}
+
+async function boot(){
+  showScreen('loading');
+  const { data: { session } } = await sb.auth.getSession();
+  if(session){ await loadAll(); showScreen('app'); }
+  else { showScreen('login'); }
+}
+
+document.getElementById('loginForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value;
+  const password = document.getElementById('loginPassword').value;
+  document.getElementById('loginError').textContent = '';
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if(error){ document.getElementById('loginError').textContent = 'No se pudo iniciar sesión: ' + error.message; return; }
+  showScreen('loading');
+  await loadAll();
+  showScreen('app');
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+  await sb.auth.signOut();
+  showScreen('login');
+});
+
+async function loadAll(){
+  try{
+    const [{data:f, error:ef}, {data:g, error:eg}, {data:s, error:es}] = await Promise.all([
+      sb.from('reembolsos_familiares').select('*').order('nombre'),
+      sb.from('reembolsos_gastos').select('*').order('fecha', {ascending:false}),
+      sb.from('reembolsos_solicitudes').select('*')
+    ]);
+    if(ef||eg||es) throw (ef||eg||es);
+    familiares = (f||[]).map(r=>({id:r.id, nombre:r.nombre}));
+    gastos = (g||[]).map(r=>({id:r.id, familiarId:r.familiar_id, fecha:r.fecha, tipo:r.tipo, descripcion:r.descripcion, montoTotal:Number(r.monto_total)}));
+    solicitudes = (s||[]).map(r=>({id:r.id, gastoId:r.gasto_id, entidad:r.entidad, fechaSolicitud:r.fecha_solicitud, montoSolicitado:Number(r.monto_solicitado), estado:r.estado, fechaPago:r.fecha_pago, montoPagado:r.monto_pagado!=null?Number(r.monto_pagado):null, nota:r.nota}));
+  }catch(err){
+    console.error('Error cargando datos', err);
+    document.getElementById('banner-slot').innerHTML = `<div class="banner error">No se pudieron cargar los datos: ${err.message||err}</div>`;
+  }
+  render();
+}
+
+function familiarNombre(id){ const f = familiares.find(x=>x.id===id); return f ? f.nombre : '—'; }
+function solicitudesDe(gastoId){ return solicitudes.filter(s=>s.gastoId===gastoId); }
+function solicitudDeEntidad(gastoId, entidad){ return solicitudes.find(s=>s.gastoId===gastoId && s.entidad===entidad); }
+
+function render(){
+  renderHero();
+  renderPendientes();
+  renderSinSolicitud();
+  renderFamiliarSelect();
+  renderFiltroFamiliarSelect();
+  renderGastos();
+  renderFamiliares();
+}
+
+function renderHero(){
+  const pendientes = solicitudes.filter(s=>s.estado==='solicitado');
+  const totalPendiente = pendientes.reduce((sum,s)=>sum+s.montoSolicitado,0);
+  const gastosSinSolicitud = gastos.filter(g=>solicitudesDe(g.id).length===0);
+  document.getElementById('hero').innerHTML = `
+    <div class="card">
+      <div class="amount num">${pendientes.length}</div>
+      <div class="label">Solicitudes en seguimiento · ${fmtMoney(totalPendiente)}</div>
+    </div>
+    <div class="card">
+      <div class="amount num">${gastosSinSolicitud.length}</div>
+      <div class="label">Gastos sin solicitud registrada</div>
+    </div>`;
+}
+
+function diasDesde(fechaStr){
+  const f = new Date(fechaStr+'T00:00:00');
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  return Math.round((hoy - f) / 86400000);
+}
+
+function renderPendientes(){
+  const el = document.getElementById('pendientesList');
+  const pendientes = solicitudes.filter(s=>s.estado==='solicitado').slice().sort((a,b)=>a.fechaSolicitud.localeCompare(b.fechaSolicitud));
+  if(pendientes.length===0){ el.innerHTML = '<div class="empty">No tienes solicitudes pendientes de seguimiento.</div>'; return; }
+  el.innerHTML = pendientes.map(s=>{
+    const g = gastos.find(x=>x.id===s.gastoId);
+    const dias = diasDesde(s.fechaSolicitud);
+    return `<div class="pending-item">
+      <div class="top-row">
+        <div><div class="name">${entidadLabel[s.entidad]} · ${g?familiarNombre(g.familiarId):'—'}</div>
+        <div class="meta">${g?(g.descripcion||tipoLabel[g.tipo]):''} · solicitado hace ${dias} día(s)</div></div>
+        <div style="text-align:right;"><div class="num" style="font-size:14px;">${fmtMoney(s.montoSolicitado)}</div>
+        <button class="ghost" onclick="marcarPagadoRapido('${s.id}')">marcar pagado</button></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderSinSolicitud(){
+  const el = document.getElementById('sinSolicitudList');
+  const sinSolicitud = gastos.filter(g=>solicitudesDe(g.id).length===0);
+  if(sinSolicitud.length===0){ el.innerHTML = '<div class="empty">Todos tus gastos tienen una solicitud ingresada.</div>'; return; }
+  el.innerHTML = sinSolicitud.map(g=>`<div class="pending-item">
+      <div class="top-row">
+        <div><div class="name">${familiarNombre(g.familiarId)} · ${g.descripcion || tipoLabel[g.tipo]}</div>
+        <div class="meta">${tipoLabel[g.tipo]} · ${fmtFecha(g.fecha)}</div></div>
+        <div style="text-align:right;"><div class="num" style="font-size:14px;">${fmtMoney(g.montoTotal)}</div>
+        <button class="ghost" onclick="irAIngresarReembolso('${g.id}')">ingresar reembolso</button></div>
+      </div>
+    </div>`).join('');
+}
+
+function irAIngresarReembolso(gastoId){
+  registradosFiltro = { texto:'', familiarId:'', tipo:'' };
+  document.getElementById('filtroTexto').value = '';
+  document.getElementById('filtroFamiliar').value = '';
+  document.getElementById('filtroTipo').value = '';
+  const idx = gastosFiltrados().findIndex(g=>g.id===gastoId);
+  registradosPage = idx>=0 ? Math.floor(idx / GASTOS_PAGE_SIZE) + 1 : 1;
+  openForm = { gastoId, entidad: 'isapre' };
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('section.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelector('[data-tab="reembolsos"]').classList.add('active');
+  document.getElementById('panel-reembolsos').classList.add('active');
+  render();
+  const target = document.getElementById('gasto-'+gastoId);
+  if(target) target.scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+function marcarPagadoRapido(id){
+  editingSolicitud = id;
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('section.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelector('[data-tab="reembolsos"]').classList.add('active');
+  document.getElementById('panel-reembolsos').classList.add('active');
+  render();
+  const target = document.getElementById('sol-'+id);
+  if(target) target.scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+function renderFamiliarSelect(){
+  const sel = document.getElementById('gFamiliar');
+  const prev = sel.value;
+  sel.innerHTML = familiares.map(f=>`<option value="${f.id}">${f.nombre}</option>`).join('');
+  if(prev) sel.value = prev;
+  document.getElementById('gFecha').value = new Date().toISOString().slice(0,10);
+}
+
+function renderFiltroFamiliarSelect(){
+  const sel = document.getElementById('filtroFamiliar');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">Todos</option>' + familiares.map(f=>`<option value="${f.id}">${f.nombre}</option>`).join('');
+  sel.value = prev;
+}
+
+function gastosFiltrados(){
+  return gastos.filter(g=>{
+    if(registradosFiltro.familiarId && g.familiarId !== registradosFiltro.familiarId) return false;
+    if(registradosFiltro.tipo && g.tipo !== registradosFiltro.tipo) return false;
+    if(registradosFiltro.texto){
+      const q = registradosFiltro.texto.toLowerCase();
+      const texto = `${g.descripcion||''} ${tipoLabel[g.tipo]} ${familiarNombre(g.familiarId)}`.toLowerCase();
+      if(!texto.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderPaginador(totalPages){
+  const el = document.getElementById('gastosPaginador');
+  if(totalPages<=1){ el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <button onclick="cambiarPaginaGastos(${registradosPage-1})" ${registradosPage<=1?'disabled':''}>‹ Anterior</button>
+    <span class="page-info">Página ${registradosPage} de ${totalPages}</span>
+    <button onclick="cambiarPaginaGastos(${registradosPage+1})" ${registradosPage>=totalPages?'disabled':''}>Siguiente ›</button>
+  `;
+}
+
+function cambiarPaginaGastos(p){ registradosPage = p; renderGastos(); }
+
+function renderGastos(){
+  const el = document.getElementById('gastosList');
+  const filtrados = gastosFiltrados();
+  if(gastos.length===0){ el.innerHTML = '<div class="empty">Aún no registras gastos.</div>'; document.getElementById('gastosPaginador').innerHTML=''; return; }
+  if(filtrados.length===0){ el.innerHTML = '<div class="empty">No hay gastos que coincidan con el filtro.</div>'; document.getElementById('gastosPaginador').innerHTML=''; return; }
+  const totalPages = Math.max(1, Math.ceil(filtrados.length / GASTOS_PAGE_SIZE));
+  if(registradosPage > totalPages) registradosPage = totalPages;
+  const start = (registradosPage-1) * GASTOS_PAGE_SIZE;
+  const pagina = filtrados.slice(start, start + GASTOS_PAGE_SIZE);
+  el.innerHTML = pagina.map(g=>{
+    const isapre = solicitudDeEntidad(g.id, 'isapre');
+    const seguro = solicitudDeEntidad(g.id, 'seguro');
+    return `<div class="gasto-card" id="gasto-${g.id}">
+      <div class="gasto-head">
+        <div><div class="name">${familiarNombre(g.familiarId)} · ${g.descripcion || tipoLabel[g.tipo]}</div>
+        <div class="sector">${tipoLabel[g.tipo]} · ${fmtFecha(g.fecha)}</div></div>
+        <div style="text-align:right;">
+          <div class="amount num">${fmtMoney(g.montoTotal)}</div>
+          <button class="ghost" onclick="borrarGasto('${g.id}')">borrar</button>
+        </div>
+      </div>
+      <div class="solicitudes-row">
+        ${solicitudSlotHTML(g.id, 'isapre', isapre)}
+        ${solicitudSlotHTML(g.id, 'seguro', seguro)}
+      </div>
+    </div>`;
+  }).join('');
+  renderPaginador(totalPages);
+}
+
+function solicitudSlotHTML(gastoId, entidad, sol){
+  const formAbierto = openForm && openForm.gastoId===gastoId && openForm.entidad===entidad;
+  if(!sol){
+    if(formAbierto){
+      return `<div class="sol-slot">
+        <div class="sol-tipo">${entidadLabel[entidad]}${entidadIconHTML(entidad)}</div>
+        <div class="mini-form">
+          <input type="text" inputmode="numeric" class="mono" id="newSolMonto" placeholder="Monto solicitado" oninput="formatMontoInput(this)">
+          <input type="date" id="newSolFecha" value="${new Date().toISOString().slice(0,10)}">
+          <div class="mini-form-actions">
+            <button class="secondary" onclick="guardarNuevaSolicitud('${gastoId}','${entidad}')">Guardar</button>
+            <button class="ghost" onclick="cerrarForm()">cancelar</button>
+          </div>
+        </div>
+      </div>`;
+    }
+    return `<div class="sol-slot">
+      <div class="sol-tipo">${entidadLabel[entidad]}${entidadIconHTML(entidad)}</div>
+      <button class="sol-add-btn" onclick="abrirForm('${gastoId}','${entidad}')">+ Agregar solicitud</button>
+    </div>`;
+  }
+  const editando = editingSolicitud === sol.id;
+  if(editando){
+    return `<div class="sol-slot filled" id="sol-${sol.id}">
+      <div class="sol-tipo">${entidadLabel[entidad]}${entidadIconHTML(entidad)}</div>
+      <div class="mini-form">
+        <select id="editEstado-${sol.id}">
+          <option value="solicitado" ${sol.estado==='solicitado'?'selected':''}>Solicitado</option>
+          <option value="pagado" ${sol.estado==='pagado'?'selected':''}>Pagado</option>
+          <option value="rechazado" ${sol.estado==='rechazado'?'selected':''}>Rechazado</option>
+        </select>
+        <input type="text" inputmode="numeric" class="mono" id="editMontoPagado-${sol.id}" placeholder="Monto pagado" oninput="formatMontoInput(this)" value="${fmtMontoInputValue(sol.montoPagado)}">
+        <input type="date" id="editFechaPago-${sol.id}" value="${sol.fechaPago||''}">
+        <div class="mini-form-actions">
+          <button class="secondary" onclick="guardarEdicionSolicitud('${sol.id}')">Guardar</button>
+          <button class="ghost" onclick="editingSolicitud=null; render();">cancelar</button>
+        </div>
+        <button class="ghost" onclick="borrarSolicitud('${sol.id}')">borrar solicitud</button>
+      </div>
+    </div>`;
+  }
+  const pagado = sol.estado === 'pagado';
+  const montoPagado = sol.montoPagado || 0;
+  const copago = Math.max(0, sol.montoSolicitado - montoPagado);
+  const mostrarCopago = entidad === 'isapre' && pagado && copago > 0;
+  return `<div class="sol-slot filled" id="sol-${sol.id}" style="cursor:pointer;" onclick="editingSolicitud='${sol.id}'; render();">
+    <div class="sol-tipo">${entidadLabel[entidad]}${entidadIconHTML(entidad)}</div>
+    <div class="sol-monto-row">
+      <span class="sol-monto-label">Monto solicitado</span>
+      <span class="sol-monto num">${fmtMoney(sol.montoSolicitado)}</span>
+    </div>
+    ${pagado ? `<div class="sol-sub-row">
+      <span>Reembolsado</span>
+      <span class="num">${fmtMoney(montoPagado)}</span>
+    </div>` : ''}
+    ${mostrarCopago ? `<div class="sol-sub-row copago">
+      <span>Copago (a solicitar al seguro)</span>
+      <span class="num">${fmtMoney(copago)}</span>
+    </div>` : ''}
+    <span class="status ${estadoClass[sol.estado]}">${estadoLabel[sol.estado]}</span>
+    <div class="sol-meta">Solicitado ${fmtFecha(sol.fechaSolicitud)}${sol.fechaPago?' · Pagado '+fmtFecha(sol.fechaPago):''}</div>
+  </div>`;
+}
+
+function abrirForm(gastoId, entidad){ openForm = {gastoId, entidad}; render(); }
+function cerrarForm(){ openForm = null; render(); }
+
+async function guardarNuevaSolicitud(gastoId, entidad){
+  const monto = parseMonto(document.getElementById('newSolMonto').value);
+  const fecha = document.getElementById('newSolFecha').value;
+  if(!monto || monto<=0){ alert('Ingresa un monto válido.'); return; }
+  try{
+    const { data, error } = await sb.from('reembolsos_solicitudes').insert({
+      gasto_id: gastoId, entidad, fecha_solicitud: fecha, monto_solicitado: monto, estado: 'solicitado'
+    }).select().single();
+    if(error) throw error;
+    solicitudes.push({ id:data.id, gastoId:data.gasto_id, entidad:data.entidad, fechaSolicitud:data.fecha_solicitud, montoSolicitado:Number(data.monto_solicitado), estado:data.estado, fechaPago:data.fecha_pago, montoPagado:null, nota:data.nota });
+    openForm = null;
+    render();
+  }catch(err){ alert('No se pudo registrar la solicitud: ' + err.message); }
+}
+
+async function guardarEdicionSolicitud(id){
+  const estado = document.getElementById('editEstado-'+id).value;
+  const montoPagadoRaw = document.getElementById('editMontoPagado-'+id).value;
+  const fechaPago = document.getElementById('editFechaPago-'+id).value || null;
+  const montoPagado = montoPagadoRaw.trim() ? parseMonto(montoPagadoRaw) : null;
+  try{
+    const { error } = await sb.from('reembolsos_solicitudes').update({
+      estado, fecha_pago: estado==='pagado' ? fechaPago : null, monto_pagado: estado==='pagado' ? montoPagado : null
+    }).eq('id', id);
+    if(error) throw error;
+    const sol = solicitudes.find(s=>s.id===id);
+    sol.estado = estado;
+    sol.fechaPago = estado==='pagado' ? fechaPago : null;
+    sol.montoPagado = estado==='pagado' ? montoPagado : null;
+    editingSolicitud = null;
+    render();
+  }catch(err){ alert('No se pudo guardar: ' + err.message); }
+}
+
+async function borrarSolicitud(id){
+  try{ await sb.from('reembolsos_solicitudes').delete().eq('id', id); solicitudes = solicitudes.filter(s=>s.id!==id); editingSolicitud=null; render(); }
+  catch(e){ alert('No se pudo borrar la solicitud: ' + e.message); }
+}
+
+async function borrarGasto(id){
+  if(!confirm('Esto también borrará sus solicitudes asociadas. ¿Continuar?')) return;
+  try{
+    await sb.from('reembolsos_gastos').delete().eq('id', id);
+    gastos = gastos.filter(g=>g.id!==id);
+    solicitudes = solicitudes.filter(s=>s.gastoId!==id);
+    render();
+  }catch(e){ alert('No se pudo borrar el gasto: ' + e.message); }
+}
+
+document.getElementById('gastoForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const fid = document.getElementById('gFamiliar').value;
+  if(!fid){ alert('Agrega un familiar primero.'); return; }
+  const payload = {
+    familiar_id: fid,
+    fecha: document.getElementById('gFecha').value,
+    tipo: document.getElementById('gTipo').value,
+    descripcion: document.getElementById('gDescripcion').value,
+    monto_total: parseMonto(document.getElementById('gMonto').value)
+  };
+  try{
+    const { data, error } = await sb.from('reembolsos_gastos').insert(payload).select().single();
+    if(error) throw error;
+    gastos.unshift({ id:data.id, familiarId:data.familiar_id, fecha:data.fecha, tipo:data.tipo, descripcion:data.descripcion, montoTotal:Number(data.monto_total) });
+    document.getElementById('gDescripcion').value=''; document.getElementById('gMonto').value='';
+    render();
+  }catch(err){ alert('No se pudo registrar el gasto: ' + err.message); }
+});
+
+document.getElementById('filtroTexto').addEventListener('input', (e)=>{
+  registradosFiltro.texto = e.target.value;
+  registradosPage = 1;
+  renderGastos();
+});
+document.getElementById('filtroFamiliar').addEventListener('change', (e)=>{
+  registradosFiltro.familiarId = e.target.value;
+  registradosPage = 1;
+  renderGastos();
+});
+document.getElementById('filtroTipo').addEventListener('change', (e)=>{
+  registradosFiltro.tipo = e.target.value;
+  registradosPage = 1;
+  renderGastos();
+});
+
+function renderFamiliares(){
+  const el = document.getElementById('familiaresList');
+  if(familiares.length===0){ el.innerHTML = '<div class="empty">Aún no agregas familiares.</div>'; return; }
+  el.innerHTML = familiares.map(f=>`<div class="row">
+    <div class="name">${f.nombre}</div>
+    <button class="ghost" onclick="borrarFamiliar('${f.id}')">borrar</button>
+  </div>`).join('');
+}
+
+document.getElementById('familiarForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const nombre = document.getElementById('fNombre').value;
+  try{
+    const { data, error } = await sb.from('reembolsos_familiares').insert({ nombre }).select().single();
+    if(error) throw error;
+    familiares.push({ id:data.id, nombre:data.nombre });
+    document.getElementById('familiarForm').reset();
+    render();
+  }catch(err){ alert('No se pudo agregar el familiar: ' + err.message); }
+});
+
+async function borrarFamiliar(id){
+  if(!confirm('Esto también borrará sus gastos y solicitudes asociadas. ¿Continuar?')) return;
+  try{
+    await sb.from('reembolsos_familiares').delete().eq('id', id);
+    familiares = familiares.filter(f=>f.id!==id);
+    const idsGastos = gastos.filter(g=>g.familiarId===id).map(g=>g.id);
+    gastos = gastos.filter(g=>g.familiarId!==id);
+    solicitudes = solicitudes.filter(s=>!idsGastos.includes(s.gastoId));
+    render();
+  }catch(e){ alert('No se pudo borrar el familiar: ' + e.message); }
+}
+
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('section.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
+  });
+});
+
+boot();
+</script>
+</body>
+</html>
