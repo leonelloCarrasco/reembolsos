@@ -516,6 +516,8 @@ function solicitudSlotHTML(gastoId, entidad, sol){
   const montoPagado = sol.montoPagado || 0;
   const copago = Math.max(0, sol.montoSolicitado - montoPagado);
   const mostrarCopago = entidad === 'isapre' && pagado && copago > 0;
+  const cobertura = sol.montoSolicitado > 0 ? Math.round(montoPagado / sol.montoSolicitado * 100) : 0;
+  const mostrarCobertura = pagado;
   return `<div class="sol-slot filled" id="sol-${sol.id}" style="cursor:pointer;" onclick="editingSolicitud='${sol.id}'; render();">
     <div class="sol-tipo">${entidadLabel[entidad]}${entidadIconHTML(entidad)}</div>
     <div class="sol-monto-row">
@@ -525,6 +527,10 @@ function solicitudSlotHTML(gastoId, entidad, sol){
     ${pagado ? `<div class="sol-sub-row">
       <span>Reembolsado</span>
       <span class="num">${fmtMoney(montoPagado)}</span>
+    </div>` : ''}
+    ${mostrarCobertura ? `<div class="sol-sub-row">
+      <span>Cobertura</span>
+      <span class="num">${cobertura}%</span>
     </div>` : ''}
     ${mostrarCopago ? `<div class="sol-sub-row copago">
       <span>Copago (a solicitar al seguro)</span>
