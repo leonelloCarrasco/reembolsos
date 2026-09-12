@@ -97,6 +97,17 @@
   .paginador button:disabled{opacity:.4;cursor:default;}
   .paginador .page-info{font-size:12px;color:var(--ink-soft);}
 
+  .chart-card{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:16px 16px 10px;margin-bottom:20px;}
+  .chart-svg-wrap{position:relative;}
+  .chart-svg{width:100%;height:auto;display:block;}
+  .chart-tooltip{display:none;position:absolute;top:0;left:0;pointer-events:none;background:var(--ink);color:#fff;border-radius:5px;padding:8px 10px;font-size:12px;white-space:nowrap;z-index:5;box-shadow:0 4px 10px rgba(0,0,0,.15);}
+  .chart-tooltip .tt-mes{font-weight:500;margin-bottom:4px;text-transform:capitalize;}
+  .chart-tooltip .tt-row{display:flex;justify-content:space-between;gap:14px;}
+  .chart-tooltip .tt-row .num{font-family:'IBM Plex Mono',monospace;}
+  .chart-legend{display:flex;gap:16px;justify-content:center;margin-top:6px;flex-wrap:wrap;}
+  .chart-legend .legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-soft);}
+  .chart-legend .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+
   .pending-item{padding:10px 0;border-bottom:1px solid var(--line);font-size:13px;}
   .pending-item:last-child{border-bottom:none;}
   .pending-item .top-row{display:flex;justify-content:space-between;gap:8px;}
@@ -159,6 +170,7 @@
   </nav>
 
   <section class="panel active" id="panel-resumen">
+    <div class="chart-card" id="chartReembolsos"></div>
     <h3 class="section-title">Solicitudes pendientes de seguimiento</h3>
     <div id="pendientesList"></div>
     <h3 class="section-title" style="margin-top:24px;">Gastos sin solicitud ingresada</h3>
@@ -203,6 +215,14 @@
           <option value="otro">Otro</option>
         </select>
       </label>
+      <label>Estado
+        <select id="filtroEstado">
+          <option value="">Todos</option>
+          <option value="solicitado">Solicitado</option>
+          <option value="pagado">Pagado</option>
+          <option value="rechazado">Rechazado</option>
+        </select>
+      </label>
     </div>
     <div id="gastosList"></div>
     <div class="paginador" id="gastosPaginador"></div>
@@ -229,7 +249,7 @@ let gastos = [];
 let solicitudes = [];
 let openForm = null; // { gastoId, entidad } — mini-form actualmente abierto para agregar solicitud
 let editingSolicitud = null; // id de la solicitud en edición
-let registradosFiltro = { texto:'', familiarId:'', tipo:'' };
+let registradosFiltro = { texto:'', familiarId:'', tipo:'', estado:'' };
 let registradosPage = 1;
 const GASTOS_PAGE_SIZE = 5;
 
@@ -312,6 +332,7 @@ function solicitudDeEntidad(gastoId, entidad){ return solicitudes.find(s=>s.gast
 
 function render(){
   renderHero();
+  renderChartReembolsos();
   renderPendientes();
   renderSinSolicitud();
   renderFamiliarSelect();
@@ -332,6 +353,135 @@ function renderHero(){
     <div class="card">
       <div class="amount num">${gastosSinSolicitud.length}</div>
       <div class="label">Gastos sin solicitud registrada</div>
+    </div>`;
+}
+
+const MESES_CORTOS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+let chartDatosActual = [];
+
+function mostrarTooltipChart(evt, i){
+  const d = chartDatosActual[i];
+  if(!d) return;
+  const tip = document.getElementById('chartTooltip');
+  tip.innerHTML = `
+    <div class="tt-mes">${MESES_CORTOS[d.month]} ${d.year}</div>
+    <div class="tt-row"><span>Gasto Total</span><span class="num">${fmtMoney(d.gastoTotal)}</span></div>
+    <div class="tt-row"><span>Reembolso ${entidadLabel.isapre}</span><span class="num">${fmtMoney(d.isapre)}</span></div>
+    <div class="tt-row"><span>Reembolso ${entidadLabel.seguro}</span><span class="num">${fmtMoney(d.seguro)}</span></div>
+    <div class="tt-row"><span>Copago</span><span class="num">${fmtMoney(d.copago)}</span></div>`;
+  tip.style.display = 'block';
+  moverTooltipChart(evt);
+}
+
+function moverTooltipChart(evt){
+  const tip = document.getElementById('chartTooltip');
+  const wrap = tip.parentElement;
+  const rect = wrap.getBoundingClientRect();
+  let left = evt.clientX - rect.left + 12;
+  let top = evt.clientY - rect.top + 12;
+  const tipW = tip.offsetWidth || 150;
+  if(left + tipW > rect.width) left = evt.clientX - rect.left - tipW - 12;
+  tip.style.left = left + 'px';
+  tip.style.top = top + 'px';
+}
+
+function ocultarTooltipChart(){
+  document.getElementById('chartTooltip').style.display = 'none';
+}
+
+function ultimosNMeses(n){
+  const hoy = new Date();
+  const meses = [];
+  for(let i=n-1;i>=0;i--){
+    const d = new Date(hoy.getFullYear(), hoy.getMonth()-i, 1);
+    meses.push({ year:d.getFullYear(), month:d.getMonth(), key:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` });
+  }
+  return meses;
+}
+
+function niceMax(maxVal){
+  if(maxVal<=0) return 100000;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(maxVal)));
+  const residual = maxVal/magnitude;
+  let niceResidual;
+  if(residual<=1) niceResidual=1;
+  else if(residual<=2) niceResidual=2;
+  else if(residual<=5) niceResidual=5;
+  else niceResidual=10;
+  return niceResidual*magnitude;
+}
+
+function renderChartReembolsos(){
+  const el = document.getElementById('chartReembolsos');
+  if(!el) return;
+  const meses = ultimosNMeses(12);
+  const datos = meses.map(m=>{
+    const gastosDelMes = gastos.filter(g=>g.fecha.slice(0,7) === m.key);
+    let isapre = 0, seguro = 0, gastoTotal = 0;
+    gastosDelMes.forEach(g=>{
+      gastoTotal += g.montoTotal;
+      solicitudesDe(g.id).forEach(s=>{
+        if(s.estado==='pagado'){
+          if(s.entidad==='isapre') isapre += (s.montoPagado||0);
+          else if(s.entidad==='seguro') seguro += (s.montoPagado||0);
+        }
+      });
+    });
+    const total = isapre+seguro;
+    const copago = Math.max(0, gastoTotal - total);
+    return { ...m, isapre, seguro, copago, gastoTotal, total };
+  });
+
+  const maxTotal = Math.max(0, ...datos.map(d=>Math.max(d.gastoTotal, d.total)));
+  const topeEje = niceMax(maxTotal);
+  const ticks = 4;
+  const chartW = 720, chartH = 220, padLeft = 66, padBottom = 26, padTop = 10, padRight = 10;
+  const plotW = chartW - padLeft - padRight;
+  const plotH = chartH - padTop - padBottom;
+  const barSlot = plotW / datos.length;
+  const barW = Math.min(30, barSlot * 0.55);
+
+  let gridSvg = '';
+  for(let i=0;i<=ticks;i++){
+    const val = topeEje / ticks * i;
+    const y = padTop + plotH - (val/topeEje)*plotH;
+    gridSvg += `<line x1="${padLeft}" y1="${y}" x2="${chartW-padRight}" y2="${y}" stroke="var(--line)" stroke-width="1" />`;
+    gridSvg += `<text x="${padLeft-8}" y="${y+4}" text-anchor="end" font-size="10" fill="var(--ink-soft)">${fmtMoney(val)}</text>`;
+  }
+
+  chartDatosActual = datos;
+
+  let barsSvg = '', hitsSvg = '';
+  datos.forEach((d,i)=>{
+    const x = padLeft + i*barSlot + (barSlot-barW)/2;
+    const hIsapre = topeEje>0 ? (d.isapre/topeEje)*plotH : 0;
+    const hSeguro = topeEje>0 ? (d.seguro/topeEje)*plotH : 0;
+    const hCopago = topeEje>0 ? (d.copago/topeEje)*plotH : 0;
+    const yIsapre = padTop + plotH - hIsapre;
+    const ySeguro = yIsapre - hSeguro;
+    const yCopago = ySeguro - hCopago;
+    const labelY = padTop + plotH + 16;
+    const labelX = x + barW/2;
+    const mesLabel = MESES_CORTOS[d.month] + (d.month===0 || i===0 ? ` '${String(d.year).slice(2)}` : '');
+    barsSvg += `${hCopago>0?`<rect x="${x.toFixed(1)}" y="${yCopago.toFixed(1)}" width="${barW.toFixed(1)}" height="${hCopago.toFixed(1)}" fill="var(--brick)" rx="1"/>`:''}${hSeguro>0?`<rect x="${x.toFixed(1)}" y="${ySeguro.toFixed(1)}" width="${barW.toFixed(1)}" height="${hSeguro.toFixed(1)}" fill="var(--gold)" rx="1"/>`:''}${hIsapre>0?`<rect x="${x.toFixed(1)}" y="${yIsapre.toFixed(1)}" width="${barW.toFixed(1)}" height="${hIsapre.toFixed(1)}" fill="var(--pine)" rx="1"/>`:''}<text x="${labelX.toFixed(1)}" y="${labelY}" text-anchor="middle" font-size="10" fill="var(--ink-soft)">${mesLabel}</text>`;
+    const slotX = padLeft + i*barSlot;
+    hitsSvg += `<rect x="${slotX.toFixed(1)}" y="${padTop}" width="${barSlot.toFixed(1)}" height="${plotH}" fill="transparent" style="cursor:pointer" onmouseenter="mostrarTooltipChart(event, ${i})" onmousemove="moverTooltipChart(event)" onmouseleave="ocultarTooltipChart()" />`;
+  });
+
+  el.innerHTML = `
+    <h3 class="section-title">Gastos y reembolsos por mes del gasto · últimos 12 meses</h3>
+    <div class="chart-svg-wrap">
+      <svg class="chart-svg" viewBox="0 0 ${chartW} ${chartH}" preserveAspectRatio="xMidYMid meet">
+        ${gridSvg}
+        ${barsSvg}
+        ${hitsSvg}
+      </svg>
+      <div class="chart-tooltip" id="chartTooltip"></div>
+    </div>
+    <div class="chart-legend">
+      <span class="legend-item"><span class="dot" style="background:var(--pine)"></span>${entidadLabel.isapre}</span>
+      <span class="legend-item"><span class="dot" style="background:var(--gold)"></span>${entidadLabel.seguro}</span>
+      <span class="legend-item"><span class="dot" style="background:var(--brick)"></span>Copago</span>
     </div>`;
 }
 
@@ -420,6 +570,7 @@ function gastosFiltrados(){
   return gastos.filter(g=>{
     if(registradosFiltro.familiarId && g.familiarId !== registradosFiltro.familiarId) return false;
     if(registradosFiltro.tipo && g.tipo !== registradosFiltro.tipo) return false;
+    if(registradosFiltro.estado && !solicitudesDe(g.id).some(s=>s.estado === registradosFiltro.estado)) return false;
     if(registradosFiltro.texto){
       const q = registradosFiltro.texto.toLowerCase();
       const texto = `${g.descripcion||''} ${tipoLabel[g.tipo]} ${familiarNombre(g.familiarId)}`.toLowerCase();
@@ -625,6 +776,11 @@ document.getElementById('filtroFamiliar').addEventListener('change', (e)=>{
 });
 document.getElementById('filtroTipo').addEventListener('change', (e)=>{
   registradosFiltro.tipo = e.target.value;
+  registradosPage = 1;
+  renderGastos();
+});
+document.getElementById('filtroEstado').addEventListener('change', (e)=>{
+  registradosFiltro.estado = e.target.value;
   registradosPage = 1;
   renderGastos();
 });
